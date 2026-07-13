@@ -19,4 +19,4 @@ husd.MinorString()                              // "100003010000000000000000"
 parts, _ := money.FromCents(100).Split(3)       // 34 + 33 + 33 = 100, nothing lost
 ```
 
-Currencies carry their smallest-unit decimals (USD 2, USDC 6, HUSD/ETH 18). MIT.
+Currencies carry their smallest-unit decimals (USD 2, USDC 6, HUSD/ETH 18). BSD-3-Clause.
