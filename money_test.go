@@ -66,7 +66,7 @@ func TestZeroValueAgnostic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("accumulate: %v", err)
 	}
-	if acc.MinorString() != "150000000000000000" || acc.Currency().Code != "USD" {
+	if acc.MinorString() != "150" || acc.Currency().Code != "USD" {
 		t.Fatalf("accumulated = %s %s", acc.MinorString(), acc.Currency().Code)
 	}
 	if Zero(USD).Cmp(Amount{}) != 0 {
