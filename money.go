@@ -86,27 +86,39 @@ func (a Amount) Minor() *big.Int { return a.v.Rescale(a.cur.Decimals).Coef() }
 // MinorString is the minor-unit integer as a decimal string (the canonical storage form).
 func (a Amount) MinorString() string { return a.Minor().String() }
 
-func (a Amount) sameCur(b Amount) error {
-	if a.cur.Code != b.cur.Code {
-		return fmt.Errorf("money: currency mismatch %s vs %s", a.cur.Code, b.cur.Code)
+// resolveCur returns the currency the two operands agree on. A ZERO-VALUE Amount
+// (empty currency code, value 0) is currency-agnostic — 0 adds to any currency — so it
+// adopts the other operand's currency. Two different non-empty currencies mismatch.
+func (a Amount) resolveCur(b Amount) (Currency, error) {
+	switch {
+	case a.cur.Code == b.cur.Code:
+		return a.cur, nil
+	case a.cur.Code == "":
+		return b.cur, nil
+	case b.cur.Code == "":
+		return a.cur, nil
+	default:
+		return Currency{}, fmt.Errorf("money: currency mismatch %s vs %s", a.cur.Code, b.cur.Code)
 	}
-	return nil
 }
 
-// Add returns a + b; both must be the same currency.
+// Add returns a + b. A zero-value operand adopts the other's currency; two different
+// non-zero currencies error.
 func (a Amount) Add(b Amount) (Amount, error) {
-	if err := a.sameCur(b); err != nil {
+	cur, err := a.resolveCur(b)
+	if err != nil {
 		return Amount{}, err
 	}
-	return Amount{v: a.v.Add(b.v), cur: a.cur}, nil
+	return Amount{v: a.v.Add(b.v), cur: cur}, nil
 }
 
-// Sub returns a − b; both must be the same currency.
+// Sub returns a − b (same currency rule as Add).
 func (a Amount) Sub(b Amount) (Amount, error) {
-	if err := a.sameCur(b); err != nil {
+	cur, err := a.resolveCur(b)
+	if err != nil {
 		return Amount{}, err
 	}
-	return Amount{v: a.v.Sub(b.v), cur: a.cur}, nil
+	return Amount{v: a.v.Sub(b.v), cur: cur}, nil
 }
 
 // Mul scales the amount by an exact decimal factor (e.g. a token count or a fee rate),
@@ -118,10 +130,11 @@ func (a Amount) Mul(factor decimal.Decimal) Amount {
 // Neg returns −a.
 func (a Amount) Neg() Amount { return Amount{v: a.v.Neg(), cur: a.cur} }
 
-// Cmp reports −1,0,+1 as a <,==,> b (same currency required; panics on mismatch — use
-// after checking Currency for untrusted inputs).
+// Cmp reports −1,0,+1 as a <,==,> b. A zero-value operand is currency-agnostic; two
+// different non-zero currencies panic (comparing USD to EUR is a bug, not a runtime
+// condition — check Currency first for untrusted inputs).
 func (a Amount) Cmp(b Amount) int {
-	if a.cur.Code != b.cur.Code {
+	if _, err := a.resolveCur(b); err != nil {
 		panic("money: Cmp across currencies " + a.cur.Code + "/" + b.cur.Code)
 	}
 	return a.v.Cmp(b.v)

@@ -54,3 +54,22 @@ func TestSplitExact(t *testing.T) {
 		t.Fatalf("split = %s,%s,%s", parts[0].MinorString(), parts[1].MinorString(), parts[2].MinorString())
 	}
 }
+
+func TestZeroValueAgnostic(t *testing.T) {
+	// A zero-value Amount{} (empty currency) must add to any currency — it's 0.
+	var acc Amount // zero value
+	acc, err := acc.Add(FromCents(100))
+	if err != nil {
+		t.Fatalf("zero + $1: %v", err)
+	}
+	acc, err = acc.Add(FromCents(50))
+	if err != nil {
+		t.Fatalf("accumulate: %v", err)
+	}
+	if acc.MinorString() != "150000000000000000" || acc.Currency().Code != "USD" {
+		t.Fatalf("accumulated = %s %s", acc.MinorString(), acc.Currency().Code)
+	}
+	if Zero(USD).Cmp(Amount{}) != 0 {
+		t.Fatal("zero cmp")
+	}
+}
