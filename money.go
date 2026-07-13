@@ -17,28 +17,8 @@ import (
 	"github.com/hanzoai/decimal"
 )
 
-// Currency is a currency's identity: an ISO-4217-style code and the number of decimal
-// places in its smallest unit (USD 2, JPY 0, USDC 6, an 18-decimal ERC-20 18). Custom
-// currencies are allowed — construct one directly.
-type Currency struct {
-	Code     string
-	Decimals int32
-}
-
-// Common currencies. Fiat use the ISO minor unit; crypto/stablecoins use their on-chain
-// token decimals so an off-chain Amount and an on-chain balance share one scale.
-var (
-	USD  = Currency{"USD", 2}
-	EUR  = Currency{"EUR", 2}
-	GBP  = Currency{"GBP", 2}
-	JPY  = Currency{"JPY", 0}
-	USDC = Currency{"USDC", 6}
-	USDT = Currency{"USDT", 6}
-	ETH  = Currency{"ETH", 18}
-	HUSD = Currency{"HUSD", 18} // Hanzo USD stablecoin (ERC-20, 18 decimals)
-)
-
-// Amount is an exact money value: a decimal in a currency.
+// Amount is an exact money value: a decimal in a currency. (Currency and the currency
+// registry live in currency.go.)
 type Amount struct {
 	v   decimal.Decimal
 	cur Currency
@@ -181,12 +161,6 @@ func (a Amount) Split(n int) ([]Amount, error) {
 
 // String renders the exact decimal value ("0.00132").
 func (a Amount) String() string { return a.v.String() }
-
-// Display renders the value rounded to the currency's decimals with the code
-// ("100003.01 USD") — the human form.
-func (a Amount) Display() string {
-	return a.v.Rescale(a.cur.Decimals).String() + " " + a.cur.Code
-}
 
 // MarshalJSON emits {"amount":"<decimal>","currency":"USD"} — exact strings, no float.
 func (a Amount) MarshalJSON() ([]byte, error) {
