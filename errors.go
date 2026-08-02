@@ -17,4 +17,8 @@ var (
 	ErrNoRate = errors.New("money: no exchange rate")
 	// ErrNonPositive is returned when a positive value was required (split parts, ratios).
 	ErrNonPositive = errors.New("money: value must be positive")
+	// ErrOverflow is returned when an exact value does not fit the requested
+	// machine type. It is never a rounded or truncated answer: a money conversion
+	// that silently wraps reports a balance nobody holds.
+	ErrOverflow = errors.New("money: value does not fit an int64")
 )
