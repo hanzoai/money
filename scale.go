@@ -5,6 +5,7 @@ package money
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"strconv"
 
 	"github.com/hanzoai/decimal"
@@ -61,3 +62,54 @@ func RateFromFloat(f float64) (decimal.Decimal, error) {
 	}
 	return decimal.Parse(strconv.FormatFloat(f, 'f', -1, 64))
 }
+
+// ScaleMinorCeil and ScaleMinorFloor are ScaleMinor for the cases where the DIRECTION of
+// the rounding is the policy, not an implementation detail: a fee the house rounds up, a
+// commission the house rounds down and keeps the remainder of. ScaleMinor's half-away-from-
+// zero is the right default for an amount that merely has to be correct; it is the wrong
+// answer for an amount somebody deliberately decided always falls one way.
+//
+// They round toward +infinity and toward -infinity respectively — math.Ceil and math.Floor,
+// not "away from zero" and "toward zero". On a refund or a credit the sign is negative and
+// the two readings disagree, so the infinities are named rather than the magnitudes.
+//
+// The point of having them here is that the obvious spellings are WRONG, and wrong in the
+// direction the caller cares most about. math.Ceil(float64(units)*rate) does not round the
+// exact product up, it rounds the FLOAT up, and a float rate is not the rate: 0.07 is held
+// a hair above 0.07, so 700 minor units × 7% lands at 49.000000000000007 and ceilings to 50
+// — a cent invented on an amount that was exactly 49. math.Floor loses one the same way in
+// reverse, because 0.29 is held a hair below: 100 × 29% lands at 28.999999999999996 and
+// floors to 28. Truncation at least errs consistently; this errs on whichever side the
+// binary representation happened to fall, on amounts that had no fraction to round at all.
+//
+// Here the product is formed exactly in big.Int and only the true fraction decides, so an
+// exact product is returned unchanged by BOTH functions — which is the property worth
+// having: rounding a whole number is a no-op no matter which way you were going to round.
+func ScaleMinorCeil(units int64, rate decimal.Decimal) (int64, error) {
+	return scaleMinorDirected(units, rate, true)
+}
+
+// ScaleMinorFloor rounds toward -infinity. See ScaleMinorCeil.
+func ScaleMinorFloor(units int64, rate decimal.Decimal) (int64, error) {
+	return scaleMinorDirected(units, rate, false)
+}
+
+func scaleMinorDirected(units int64, rate decimal.Decimal, up bool) (int64, error) {
+	product := decimal.New(units, 0).Mul(rate) // exact: scales add, nothing is dropped
+	num := product.Coef()                      // a fresh big.Int, safe to work in place
+	den := new(big.Int).Exp(bigTen, big.NewInt(int64(product.Scale())), nil)
+	if up {
+		// ceil(n/d) == floor((n+d-1)/d) for d > 0, at every sign of n.
+		num.Add(num, new(big.Int).Sub(den, bigOne))
+	}
+	num.Div(num, den) // Euclidean division: a true floor, den > 0
+	if !num.IsInt64() {
+		return 0, fmt.Errorf("%w: %d minor units scaled by %s is %s", ErrOverflow, units, rate, num)
+	}
+	return num.Int64(), nil
+}
+
+var (
+	bigTen = big.NewInt(10)
+	bigOne = big.NewInt(1)
+)

@@ -216,3 +216,93 @@ func TestRateFromFloatFeedsScaleMinor(t *testing.T) {
 		}
 	}
 }
+
+// TestDirectedScalingBeatsTheFloat is the red test for ScaleMinorCeil/ScaleMinorFloor: it
+// pins the exact answer for products that are WHOLE cents, and shows that the float
+// spellings a caller would otherwise reach for get them wrong in both directions.
+//
+// The failures are not truncation — the exact product here IS an integer. They are the
+// float's inability to hold the rate: 0.07 is stored a hair high, so 700×0.07 lands at
+// 49.000000000000007 and Ceil invents a cent; 0.29 is stored a hair low, so 100×0.29 lands
+// at 28.999999999999996 and Floor destroys one.
+func TestDirectedScalingBeatsTheFloat(t *testing.T) {
+	cases := []struct {
+		units int64
+		rate  float64
+		want  int64 // the exact product, a whole number of minor units
+	}{
+		{700, 0.07, 49},
+		{7000, 0.07, 490},
+		{100, 0.29, 29},
+		{2900, 0.01, 29},
+		{300, 0.10, 30},
+	}
+	for _, c := range cases {
+		rate, err := RateFromFloat(c.rate)
+		if err != nil {
+			t.Fatalf("RateFromFloat(%v): %v", c.rate, err)
+		}
+		up, err := ScaleMinorCeil(c.units, rate)
+		if err != nil {
+			t.Fatalf("ScaleMinorCeil(%d, %v): %v", c.units, c.rate, err)
+		}
+		down, err := ScaleMinorFloor(c.units, rate)
+		if err != nil {
+			t.Fatalf("ScaleMinorFloor(%d, %v): %v", c.units, c.rate, err)
+		}
+		// The product is exact, so rounding it in EITHER direction is the same number.
+		if up != c.want || down != c.want {
+			t.Errorf("%d × %v: ceil=%d floor=%d, want %d for both", c.units, c.rate, up, down, c.want)
+		}
+		// And that is the number the float spellings miss.
+		if fc := int64(math.Ceil(float64(c.units) * c.rate)); fc != c.want {
+			t.Logf("  (float math.Ceil would have said %d, not %d)", fc, c.want)
+		}
+		if ff := int64(math.Floor(float64(c.units) * c.rate)); ff != c.want {
+			t.Logf("  (float math.Floor would have said %d, not %d)", ff, c.want)
+		}
+	}
+}
+
+// TestDirectedScalingRoundsTheStatedWay pins the direction itself on products that are NOT
+// whole, including negatives — where "up" means toward +infinity, not away from zero.
+func TestDirectedScalingRoundsTheStatedWay(t *testing.T) {
+	cases := []struct {
+		units             int64
+		rate              decimal.Decimal
+		wantCeil, wantFlr int64
+	}{
+		{1999, pct(10), 200, 199},    // 199.9
+		{995, pct(10), 100, 99},      // 99.5
+		{29, pct(33), 10, 9},         // 9.57
+		{-1999, pct(10), -199, -200}, // -199.9: ceil is toward +inf
+		{-995, pct(10), -99, -100},   // -99.5
+		{1250, pct(6), 75, 75},       // 75 exactly
+	}
+	for _, c := range cases {
+		up, err := ScaleMinorCeil(c.units, c.rate)
+		if err != nil {
+			t.Fatalf("ScaleMinorCeil: %v", err)
+		}
+		down, err := ScaleMinorFloor(c.units, c.rate)
+		if err != nil {
+			t.Fatalf("ScaleMinorFloor: %v", err)
+		}
+		if up != c.wantCeil || down != c.wantFlr {
+			t.Errorf("%d × %s: ceil=%d want %d, floor=%d want %d",
+				c.units, c.rate, up, c.wantCeil, down, c.wantFlr)
+		}
+	}
+}
+
+// TestDirectedScalingOverflowIsReported: a scaled amount that silently wraps is a balance
+// nobody holds, the same contract ScaleMinor keeps.
+func TestDirectedScalingOverflowIsReported(t *testing.T) {
+	huge := decimal.New(1, -18) // 10^18
+	if _, err := ScaleMinorCeil(math.MaxInt64, huge); !errors.Is(err, ErrOverflow) {
+		t.Errorf("ScaleMinorCeil overflow: got %v, want ErrOverflow", err)
+	}
+	if _, err := ScaleMinorFloor(math.MaxInt64, huge); !errors.Is(err, ErrOverflow) {
+		t.Errorf("ScaleMinorFloor overflow: got %v, want ErrOverflow", err)
+	}
+}

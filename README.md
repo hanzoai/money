@@ -29,7 +29,10 @@ money.FromHUSD(wei)                            // 18-dec on-chain stablecoin
 - **Ledger edge**: `ParseMinor`/`ParseCents` (decimal string → integer minor units), its exact
   inverse `MajorString` (integer minor units → fixed-scale decimal string), and `ScaleMinor`
   (minor units × rate → minor units, rounded half away from zero) — the set every billing API
-  needs, none of which touches a float. `RateFromFloat` makes a legacy float64 rate exact first
+  needs, none of which touches a float. `RateFromFloat` makes a legacy float64 rate exact first.
+  `ScaleMinorCeil`/`ScaleMinorFloor` are the same scaling for amounts whose direction is a
+  policy (a fee rounded up, a commission rounded down) — exact, so `math.Ceil` cannot invent a
+  cent on a product that was already whole
 - **Formatting**: `MajorString` (`"10.99"`, `"1.00"`, `"-19.99"` — the wire), `Display`
   (symbol + thousands separators — the human), `AsMajorUnits` (float, display only)
 - **Currencies**: ISO-4217 set (symbol, numeric code) + crypto (USDC/USDT/BTC/ETH/HUSD) + `Register` custom
