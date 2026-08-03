@@ -26,9 +26,10 @@ money.FromHUSD(wei)                            // 18-dec on-chain stablecoin
 - **Aggregation**: `Sum` `Min` `Max` `Avg`
 - **Exchange**: rate table + `Convert` / `ConvertWithRate`
 - **Parsing**: `ParseAmount` (`$1,234.56`, `EUR 250,75`, `£99.99`), European decimal-comma, `ParseDecimal`
-- **Ledger edge**: `ParseMinor`/`ParseCents` (decimal string → integer minor units) and its exact
-  inverse `MajorString` (integer minor units → fixed-scale decimal string) — the pair every billing
-  API needs, neither of which touches a float
+- **Ledger edge**: `ParseMinor`/`ParseCents` (decimal string → integer minor units), its exact
+  inverse `MajorString` (integer minor units → fixed-scale decimal string), and `ScaleMinor`
+  (minor units × rate → minor units, rounded half away from zero) — the set every billing API
+  needs, none of which touches a float. `RateFromFloat` makes a legacy float64 rate exact first
 - **Formatting**: `MajorString` (`"10.99"`, `"1.00"`, `"-19.99"` — the wire), `Display`
   (symbol + thousands separators — the human), `AsMajorUnits` (float, display only)
 - **Currencies**: ISO-4217 set (symbol, numeric code) + crypto (USDC/USDT/BTC/ETH/HUSD) + `Register` custom
