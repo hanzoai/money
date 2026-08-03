@@ -20,30 +20,69 @@ func FromFloat(f float64, cur Currency) Amount {
 }
 
 // AsMajorUnits returns the value as a float in major units (e.g. dollars) — for DISPLAY
-// only; never round-trip money through it.
+// only, and for the last inch of an external API whose schema genuinely demands a JSON
+// number; never round-trip money through it, and never store what it returns. When you
+// want the amount as text, that is MajorString, which is exact.
 func (a Amount) AsMajorUnits() float64 {
 	f, _ := strconv.ParseFloat(a.v.String(), 64)
 	return f
 }
 
-// Display renders the value at the currency's decimals with grouped thousands and the
-// currency symbol ("$1,234.56", "¥10000", "100,003.01 HUSD" when no symbol). Exact —
-// derived from the integer value, not a float.
-func (a Amount) Display() string {
+// majorParts rescales the value to the currency's decimals and splits it into its sign,
+// its integer digits and its zero-padded fraction. It is the ONE place the currency's
+// scale is applied, so the two renderings below cannot drift apart, and it is derived
+// from the integer value — no float64 is involved.
+func (a Amount) majorParts() (neg bool, intPart, frac string) {
 	d := a.v.Rescale(a.cur.Decimals)
-	neg := d.Sign() < 0
+	neg = d.Sign() < 0
 	s := d.Abs().String()
 
-	intPart, frac := s, ""
+	intPart, frac = s, ""
 	if i := strings.IndexByte(s, '.'); i >= 0 {
 		intPart, frac = s[:i], s[i+1:]
 	}
-	// pad fraction to the currency's decimals for a stable display
+	// pad the fraction to the currency's decimals for a stable, fixed-scale rendering
 	for int32(len(frac)) < a.cur.Decimals {
 		frac += "0"
 	}
-	grouped := group(intPart)
-	out := grouped
+	return neg, intPart, frac
+}
+
+// MajorString renders the value in MAJOR units as a plain fixed-scale decimal string —
+// "10.99", "1234567.89", "500" for a zero-decimal currency, "-19.99" for a refund. No
+// symbol, no thousands separators: this is the form every payment API means when it
+// documents an amount field as a decimal string, and it is the exact inverse of
+// ParseMinor.
+//
+// String() is NOT this conversion, and reaching for it is the easy mistake. String()
+// renders the value's own scale, so it drops trailing zeros: FromCents(100).String() is
+// "1", not "1.00". Both parse back to the same amount — which is why the round-trip law
+// holds for either — but an API handed "1" where its schema says two decimals is a
+// support ticket, and a ledger export that renders $1.00 as "1" no longer reconciles
+// column-wise. MajorString always pads to the currency's decimals.
+//
+// The other spelling to avoid is the hand-rolled one: print cents/100, a dot, then
+// cents%100. Go's % keeps the sign of the dividend, so -1999 comes out as "-19.-99" and
+// -1 as "0.-1" — and a refund is the most common negative amount there is. Deriving the
+// digits from the rescaled integer has no such case.
+func (a Amount) MajorString() string {
+	neg, intPart, frac := a.majorParts()
+	out := intPart
+	if a.cur.Decimals > 0 {
+		out += "." + frac
+	}
+	if neg {
+		return "-" + out
+	}
+	return out
+}
+
+// Display renders the value at the currency's decimals with grouped thousands and the
+// currency symbol ("$1,234.56", "¥10000", "100,003.01 HUSD" when no symbol) — the
+// human-facing form of MajorString. Exact, derived from the integer value, not a float.
+func (a Amount) Display() string {
+	neg, intPart, frac := a.majorParts()
+	out := group(intPart)
 	if a.cur.Decimals > 0 {
 		out += "." + frac
 	}
