@@ -42,4 +42,5 @@ money.FromHUSD(wei)                            // 18-dec on-chain stablecoin
 Single package `github.com/hanzoai/money` (`Amount`, `Currency`, `Exchange`, parse/format/aggregate),
 on `github.com/hanzoai/decimal`.
 
-Original work (big.Int core written from scratch, not a fork). BSD-3-Clause.
+Original work (big.Int core written from scratch, not a fork).
+MIT OR Apache-2.0, at your option — per [HIP-0137](https://github.com/hanzoai/hips/blob/main/HIPs/hip-0137-one-license.md).
