@@ -1,0 +1,17 @@
+# Canonical CI/CD config for hanzoai/money — the one file both the hanzoai/ci
+# reusable (.hanzo/workflows/cicd.yml) and platform.hanzo.ai read.
+#
+# A Go module (currency-typed amounts over hanzoai/decimal: aggregation,
+# exchange, formatting, scale). It ships from a tag and builds no image, so
+# there is no `images:` and no `deploy:` — only a gate.
+#
+# The scale and parse-minor suites are the ones that matter: minor units are
+# where money code is wrong in a way that still looks like a number. `-count=1`
+# so a green is this commit and not the test cache.
+test:
+  - name: build
+    run: |
+      set -e
+      go build ./...
+      go vet ./...
+      go test -race -count=1 ./...
